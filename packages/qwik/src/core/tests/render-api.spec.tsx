@@ -370,6 +370,33 @@ describe('render api', () => {
         expect(idOf(first.html)).not.toEqual(idOf(second.html));
       });
     });
+    describe('instance', () => {
+      it('should keep the given instance id on the container and its state', async () => {
+        const result = await renderToStringAndSetPlatform(<Counter />, {
+          containerTagName: 'div',
+          containerAttributes: { 'q:instance': 'testhash' },
+        });
+        expect(result.html).toContain(`q:instance="testhash"`);
+        expect(result.html).toContain(`type="qwik/state" q:instance="testhash"`);
+      });
+
+      it('should generate an instance id when not given', async () => {
+        const result = await renderToStringAndSetPlatform(<Counter />, {
+          containerTagName: 'div',
+        });
+        expect(result.html).toMatch(/q:instance="[a-z0-9]+"/);
+      });
+
+      it('should reject an instance id that is unsafe to inline', async () => {
+        // the id is written verbatim into a script body and a selector
+        await expect(
+          renderToStringAndSetPlatform(<Counter />, {
+            containerTagName: 'div',
+            containerAttributes: { 'q:instance': 'a"];alert(1);//' },
+          })
+        ).rejects.toThrow();
+      });
+    });
     describe('locale', () => {
       it('should render', async () => {
         const testLocale = 'pl';

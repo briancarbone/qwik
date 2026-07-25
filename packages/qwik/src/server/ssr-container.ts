@@ -302,7 +302,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   private componentStack: ISsrComponentFrame[] = [];
   private cleanupQueue: CleanupQueue = [];
   private emitContainerDataFrame: ElementFrame | null = null;
-  public $instanceHash$ = randomStr();
+  public $instanceHash$: string;
   // Temporary flag to find missing roots after the state was serialized
   protected $noMoreRoots$ = false;
   private qlInclude: QwikLoaderInclude;
@@ -345,6 +345,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     this.$buildBase$ = opts.buildBase;
     this.resolvedManifest = opts.resolvedManifest;
     this.renderOptions = opts.renderOptions;
+    this.$instanceHash$ = resolveInstanceHash(opts.renderOptions.containerAttributes?.[QInstanceAttr]);
     const outOfOrderStreaming =
       (this.renderOptions as RenderToStreamOptions).streaming?.outOfOrder === true;
     if (!__EXPERIMENTAL__.suspense) {
@@ -2237,6 +2238,21 @@ function isSSRUnsafeAttr(name: string): boolean {
     }
   }
   return false;
+}
+
+const SAFE_INSTANCE_HASH = /^[a-z0-9-]+$/i;
+
+function resolveInstanceHash(supplied: string | undefined): string {
+  if (!supplied) {
+    return randomStr();
+  }
+  if (!SAFE_INSTANCE_HASH.test(supplied)) {
+    if (isDev) {
+      throw qError(QError.invalidInstanceHash, [supplied]);
+    }
+    return randomStr();
+  }
+  return supplied;
 }
 
 function randomStr() {
