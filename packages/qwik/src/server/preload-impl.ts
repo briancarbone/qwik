@@ -35,6 +35,9 @@ export const preloaderPre = (
   options: RenderToStreamOptions['preloader'],
   nonce?: string
 ) => {
+  if (options === false) {
+    return;
+  }
   const { resolvedManifest } = container;
   const base = getBase(container);
   const preloaderBundle = simplifyPath(base, resolvedManifest?.manifest?.preloader);
@@ -42,12 +45,7 @@ export const preloaderPre = (
   if (bundleGraphPath) {
     bundleGraphPath = (import.meta.env?.BASE_URL || '/') + bundleGraphPath;
   }
-  if (
-    !(import.meta.env?.DEV && !qTest) &&
-    preloaderBundle &&
-    bundleGraphPath &&
-    options !== false
-  ) {
+  if (!(import.meta.env?.DEV && !qTest) && preloaderBundle && bundleGraphPath) {
     const bundleGraph = container.resolvedManifest?.manifest.bundleGraph;
     initPreloader(bundleGraph);
 

@@ -23,6 +23,9 @@ const createContainer = () => {
     write(content: string) {
       scriptContent += content;
     },
+    writeScript(_attrs: Record<string, string>, content: string) {
+      scriptContent += content;
+    },
     closeElement() {},
   };
 
@@ -63,6 +66,24 @@ describe('preloader', () => {
         },
       },
     ]);
+    expect(getScriptContent()).toBe('');
+  });
+
+  it('does not emit preloader assets or scripts when the preloader is disabled', async () => {
+    vi.stubEnv('DEV', false);
+    vi.doMock('./qwik-copy', () => ({
+      initPreloader: vi.fn(),
+      qTest: false,
+    }));
+    vi.resetModules();
+
+    const { container, elements, getScriptContent } = createContainer();
+    const { preloaderPost, preloaderPre } = await import('./preload-impl');
+
+    preloaderPre(container, false);
+    preloaderPost(container, { preloader: false } as any);
+
+    expect(elements).toEqual([]);
     expect(getScriptContent()).toBe('');
   });
 });
