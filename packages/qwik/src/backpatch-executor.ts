@@ -8,14 +8,12 @@
  * is in backpatch-executor-shared.ts for reusability.
  */
 
-import { executeBackpatch } from './backpatch-executor-shared';
+import { executeBackpatch, RESUMABLE_CONTAINER_SELECTOR } from './backpatch-executor-shared';
 
 // When executed as an inline script in the browser
 const executorScript = document.currentScript;
 if (executorScript) {
-  const container = executorScript.closest(
-    '[q\\:container]:not([q\\:container=html]):not([q\\:container=text])'
-  );
+  const container = executorScript.closest(RESUMABLE_CONTAINER_SELECTOR);
   if (container) {
     executeBackpatch(document, container);
   }

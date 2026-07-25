@@ -9,7 +9,7 @@ import {
   Fragment as Component,
 } from '@qwik.dev/core';
 import { createDocument, ssrRenderToDom } from '@qwik.dev/core/testing';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { component$ } from '../shared/component.public';
 import { vi } from 'vitest';
 import * as logUtils from '../shared/utils/log';
@@ -20,17 +20,7 @@ const debug = false; //true;
 Error.stackTraceLimit = 100;
 
 describe('SSR Backpatching', () => {
-  it('should apply the latest backpatch data script', () => {
-    const document = createDocument({
-      html: `
-        <div q:container="paused" :="">
-          <input :="" id="initial">
-          <script type="qwik/backpatch">[1,"id","first"]</script>
-          <script type="qwik/backpatch">[1,"id","second",1,"aria-label","second"]</script>
-        </div>
-      `,
-    });
-    const container = document.querySelector('[q\\:container]')!;
+  beforeAll(() => {
     (globalThis as any).NodeFilter = {
       SHOW_ELEMENT: 1,
       SHOW_ALL: -1,
@@ -46,6 +36,19 @@ describe('SSR Backpatching', () => {
       SHOW_DOCUMENT_FRAGMENT: 1024,
       SHOW_NOTATION: 2048,
     };
+  });
+
+  it('should apply the latest backpatch data script', () => {
+    const document = createDocument({
+      html: `
+        <div q:container="paused" :="">
+          <input :="" id="initial">
+          <script type="qwik/backpatch">[1,"id","first"]</script>
+          <script type="qwik/backpatch">[1,"id","second",1,"aria-label","second"]</script>
+        </div>
+      `,
+    });
+    const container = document.querySelector('[q\\:container]')!;
     executeBackpatch(document, container);
 
     const input = document.querySelector('input')!;
@@ -638,6 +641,71 @@ describe('SSR Backpatching', () => {
 
       expect(backpatchedInput?.outerHTML).toContain('aria-labelledby="final-label"');
       expect(backpatchedInput?.outerHTML).toContain('id="final-id"');
+    });
+  });
+
+  describe('with nested containers', () => {
+    it('should not count elements inside a nested container', () => {
+      const document = createDocument({
+        html: `
+          <div q:container="paused" :="">
+            <div q:container="paused" :="">
+              <input :="" id="nested-input">
+            </div>
+            <input :="" id="outer-input">
+            <script type="qwik/backpatch">[2,"aria-label","outer"]</script>
+          </div>
+        `,
+      });
+      const container = document.querySelector('[q\\:container]')!;
+
+      executeBackpatch(document, container);
+
+      expect(document.querySelector('#outer-input')!.getAttribute('aria-label')).toBe('outer');
+      expect(document.querySelector('#nested-input')!.hasAttribute('aria-label')).toBe(false);
+    });
+
+    it('should ignore the backpatch data script of a nested container', () => {
+      const document = createDocument({
+        html: `
+          <div q:container="paused" :="">
+            <input :="" id="outer-input">
+            <script type="qwik/backpatch">[1,"aria-label","outer"]</script>
+            <div q:container="paused" :="">
+              <input :="" id="nested-input">
+              <script type="qwik/backpatch">[1,"aria-label","nested"]</script>
+            </div>
+          </div>
+        `,
+      });
+      const container = document.querySelector('[q\\:container]')!;
+
+      executeBackpatch(document, container);
+
+      expect(document.querySelector('#outer-input')!.getAttribute('aria-label')).toBe('outer');
+      expect(document.querySelector('#nested-input')!.hasAttribute('aria-label')).toBe(false);
+    });
+
+    it('should backpatch an element that follows a dangerouslySetInnerHTML container', async () => {
+      const Child = component$<{ label: string }>(({ label }) => {
+        return (
+          <>
+            <div dangerouslySetInnerHTML={'<span : id="raw-input"></span>'} />
+            <input id="target" aria-label={label} />
+          </>
+        );
+      });
+
+      const Parent = component$(() => {
+        const label = useAsync$(() => Promise.resolve('final-label'));
+        return <Child label={label.value} />;
+      });
+
+      const { document } = await ssrRenderToDom(<Parent />, { debug });
+
+      expect(document.body.innerHTML).toContain(ELEMENT_BACKPATCH_DATA);
+      expect(document.querySelector('#target')!.getAttribute('aria-label')).toBe('final-label');
+      expect(document.querySelector('#raw-input')!.hasAttribute('aria-label')).toBe(false);
     });
   });
 });
