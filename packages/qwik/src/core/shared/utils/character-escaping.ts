@@ -1,6 +1,11 @@
 import { VNodeDataSeparator } from '../vnode-data-types';
 
+const ESCAPABLE_CHAR = /["&'<>]/;
+
 export function escapeHTML(html: string): string {
+  if (!ESCAPABLE_CHAR.test(html)) {
+    return html;
+  }
   let escapedHTML = '';
   const length = html.length;
   let idx = 0;
