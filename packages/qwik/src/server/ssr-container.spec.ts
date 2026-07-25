@@ -13,7 +13,7 @@ import {
 import { VNodeDataFlag, type RenderToStreamOptions } from './types';
 import { OPEN_FRAGMENT, CLOSE_FRAGMENT } from './vnode-data';
 import { StreamHandler } from './ssr-stream-handler';
-import { StringSSRWriter } from './ssr-stream-writer';
+import { StringBufferSegmentWriter, StringSSRWriter } from './ssr-stream-writer';
 
 vi.hoisted(() => {
   vi.stubGlobal('QWIK_LOADER_DEFAULT_MINIFIED', 'min');
@@ -114,6 +114,58 @@ describe('SSR Container', () => {
       expect(element.getAttribute('data-before')).toBe('before');
       expect(element.getAttribute('data-after')).toBe('after');
     }
+  });
+
+  it('should emit an element open tag as a single stream write', async () => {
+    const { container, writer } = createTestContainer();
+    const write = vi.spyOn(writer, 'write');
+
+    container.openElement(
+      'div',
+      'my-key',
+      { id: 'a', class: 'b' },
+      { 'data-const': 'c' },
+      null,
+      null
+    );
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(writer.toString()).toBe('<div id="a" class="b" :="my-key" data-const="c">');
+
+    write.mockClear();
+    await container.closeElement();
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it('should emit root refs as their own writer chunk while batching', () => {
+    const writer = new StringBufferSegmentWriter();
+    const container = ssrCreateContainer({
+      tagName: 'div',
+      writer,
+      streamHandler: new StreamHandler({} as RenderToStreamOptions, {
+        firstFlush: 0,
+        render: 0,
+        snapshot: 0,
+      }),
+    });
+    container.openContainer();
+    container.serializationCtx.$roots$.push({});
+
+    (container as any).vNodeDatas = [
+      [
+        VNodeDataFlag.SERIALIZE | VNodeDataFlag.VIRTUAL_NODE,
+        { 'custom-ref': {} },
+        OPEN_FRAGMENT,
+        CLOSE_FRAGMENT,
+      ],
+    ];
+
+    (container as any).emitVNodeData();
+
+    const chunks = writer.extract();
+    expect(
+      chunks.some((chunk) => typeof chunk === 'object' && chunk.type === 'root-ref')
+    ).toBeTruthy();
   });
 
   it('should not emit Qwik loader before style elements', async () => {

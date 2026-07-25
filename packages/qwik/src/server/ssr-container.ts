@@ -280,6 +280,8 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
    */
   public additionalBodyNodes = new Array<JSXNodeInternal>();
 
+  /** Pieces of the tag or vNodeData node being serialized, emitted as one write when flushed. */
+  private pendingText = '';
   private lastNode: ISsrNode | null = null;
   private currentComponentNode: ISsrNode | null = null;
   private styleIds = new Set<string>();
@@ -345,7 +347,9 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     this.$buildBase$ = opts.buildBase;
     this.resolvedManifest = opts.resolvedManifest;
     this.renderOptions = opts.renderOptions;
-    this.$instanceHash$ = resolveInstanceHash(opts.renderOptions.containerAttributes?.[QInstanceAttr]);
+    this.$instanceHash$ = resolveInstanceHash(
+      opts.renderOptions.containerAttributes?.[QInstanceAttr]
+    );
     const outOfOrderStreaming =
       (this.renderOptions as RenderToStreamOptions).streaming?.outOfOrder === true;
     if (!__EXPERIMENTAL__.suspense) {
@@ -716,8 +720,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       this.emitContainerDataFrame = this.currentElementFrame;
     }
     vNodeData_openElement(this.currentElementFrame!.vNodeData);
-    this.write(LT);
-    this.write(elementName);
+    this.bufferText(LT + elementName);
     // create here for writeAttrs method to use it
     const lastNode = this.getOrCreateLastNode();
     if (varAttrs) {
@@ -730,14 +733,12 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
         hasMovedCaptures
       );
     }
-    this.write(' ' + Q_PROPS_SEPARATOR);
+    this.bufferText(' ' + Q_PROPS_SEPARATOR);
     if (key !== null) {
-      this.write(ATTR_EQUALS_QUOTE);
-      this.write(escapeHTML(key));
-      this.write(QUOTE);
+      this.bufferText(ATTR_EQUALS_QUOTE + escapeHTML(key) + QUOTE);
     } else if (qTest) {
       // Domino sometimes does not like empty attributes, so we need to add a empty value
-      this.write(EMPTY_ATTR);
+      this.bufferText(EMPTY_ATTR);
     }
     if (constAttrs && !isObjectEmpty(constAttrs)) {
       innerHTML =
@@ -801,9 +802,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     const currentFrame = this.popFrame();
     const elementName = currentFrame.elementName!;
     if (!isSelfClosingTag(elementName)) {
-      this.write(CLOSE_TAG);
-      this.write(elementName);
-      this.write(GT);
+      this.write(CLOSE_TAG + elementName + GT);
     }
     this.lastNode = null;
     // keep track of where to emit scripts
@@ -1149,7 +1148,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       if (flag & VNodeDataFlag.SERIALIZE) {
         lastSerializedIdx = this.emitVNodeSeparators(lastSerializedIdx, elementIdx);
         if (flag & VNodeDataFlag.REFERENCE) {
-          this.write(VNodeDataSeparator.REFERENCE_CH);
+          this.bufferText(VNodeDataSeparator.REFERENCE_CH);
         }
         if (
           flag &
@@ -1171,7 +1170,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
               fragmentAttrs = value;
             } else if (value === OPEN_FRAGMENT) {
               depth++;
-              this.write(VNodeDataChar.OPEN_CHAR);
+              this.bufferText(VNodeDataChar.OPEN_CHAR);
             } else if (value === CLOSE_FRAGMENT) {
               // write out fragment attributes
               if (fragmentAttrs) {
@@ -1179,24 +1178,22 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
                 fragmentAttrs = vNodeAttrsStack.pop()!;
               }
               depth--;
-              this.write(VNodeDataChar.CLOSE_CHAR);
+              this.bufferText(VNodeDataChar.CLOSE_CHAR);
             } else if (value === WRITE_ELEMENT_ATTRS) {
               // this is executed only for VNodeDataFlag.ELEMENT_NODE and written as `||some encoded attrs here||`
               if (fragmentAttrs && !isObjectEmpty(fragmentAttrs)) {
                 // double `|` to handle the case when the separator character is also at the beginning or end of the string
-                this.write(VNodeDataChar.SEPARATOR_CHAR);
-                this.write(VNodeDataChar.SEPARATOR_CHAR);
+                this.bufferText(VNodeDataChar.SEPARATOR_CHAR + VNodeDataChar.SEPARATOR_CHAR);
                 this.writeFragmentAttrs(fragmentAttrs);
-                this.write(VNodeDataChar.SEPARATOR_CHAR);
-                this.write(VNodeDataChar.SEPARATOR_CHAR);
+                this.bufferText(VNodeDataChar.SEPARATOR_CHAR + VNodeDataChar.SEPARATOR_CHAR);
                 fragmentAttrs = vNodeAttrsStack.pop()!;
               }
             } else if (value >= 0) {
               // Text nodes get encoded as alphanumeric characters.
-              this.write(encodeAsAlphanumeric(value));
+              this.bufferText(encodeAsAlphanumeric(value));
             } else {
               // Element counts get encoded as numbers.
-              this.write(String(0 - value));
+              this.bufferText(String(0 - value));
             }
           }
           while (depth-- > 0) {
@@ -1204,8 +1201,11 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
               this.writeFragmentAttrs(fragmentAttrs);
               fragmentAttrs = vNodeAttrsStack.pop()!;
             }
-            this.write(VNodeDataChar.CLOSE_CHAR);
+            this.bufferText(VNodeDataChar.CLOSE_CHAR);
           }
+        }
+        if (this.pendingText) {
+          this.flushPendingText();
         }
       }
     }
@@ -1267,59 +1267,59 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       }
       switch (key) {
         case QScopedStyle:
-          this.write(VNodeDataChar.SCOPED_STYLE_CHAR);
+          this.bufferText(VNodeDataChar.SCOPED_STYLE_CHAR);
           break;
         case OnRenderProp:
-          this.write(VNodeDataChar.RENDER_FN_CHAR);
+          this.bufferText(VNodeDataChar.RENDER_FN_CHAR);
           break;
         case ELEMENT_ID:
-          this.write(VNodeDataChar.ID_CHAR);
+          this.bufferText(VNodeDataChar.ID_CHAR);
           break;
         case ELEMENT_PROPS:
-          this.write(VNodeDataChar.PROPS_CHAR);
+          this.bufferText(VNodeDataChar.PROPS_CHAR);
           break;
         case ELEMENT_KEY:
           encodeValue = encodeVNodeDataKey;
-          this.write(VNodeDataChar.KEY_CHAR);
+          this.bufferText(VNodeDataChar.KEY_CHAR);
           break;
         case ELEMENT_SEQ:
-          this.write(VNodeDataChar.SEQ_CHAR);
+          this.bufferText(VNodeDataChar.SEQ_CHAR);
           break;
         case ELEMENT_SEQ_IDX:
-          this.write(VNodeDataChar.SEQ_IDX_CHAR);
+          this.bufferText(VNodeDataChar.SEQ_IDX_CHAR);
           break;
         case QBackRefs:
-          this.write(VNodeDataChar.BACK_REFS_CHAR);
+          this.bufferText(VNodeDataChar.BACK_REFS_CHAR);
           break;
         case QSlotParent:
-          this.write(VNodeDataChar.SLOT_PARENT_CHAR);
+          this.bufferText(VNodeDataChar.SLOT_PARENT_CHAR);
           break;
         // Skipping `\` character for now because it is used for escaping.
         case QCtxAttr:
-          this.write(VNodeDataChar.CONTEXT_CHAR);
+          this.bufferText(VNodeDataChar.CONTEXT_CHAR);
           break;
         case QSlot:
           encodeValue = encodeVNodeDataKey;
-          this.write(VNodeDataChar.SLOT_CHAR);
+          this.bufferText(VNodeDataChar.SLOT_CHAR);
           break;
         default: {
           encodeValue = encodeURI;
-          this.write(VNodeDataChar.SEPARATOR_CHAR);
-          this.write(encodeVNodeDataString(encodeVNodeDataKey(key)));
-          this.write(VNodeDataChar.SEPARATOR_CHAR);
+          this.bufferText(
+            VNodeDataChar.SEPARATOR_CHAR +
+              encodeVNodeDataString(encodeVNodeDataKey(key)) +
+              VNodeDataChar.SEPARATOR_CHAR
+          );
         }
       }
       const encodedValue = encodeVNodeDataString(encodeValue ? encodeValue(value) : value);
       const isEncoded = encodeValue ? encodedValue !== value : false;
       if (isEncoded) {
         // add separator only before and after the encoded value
-        this.write(VNodeDataChar.SEPARATOR_CHAR);
-        this.write(encodedValue);
-        this.write(VNodeDataChar.SEPARATOR_CHAR);
+        this.bufferText(VNodeDataChar.SEPARATOR_CHAR + encodedValue + VNodeDataChar.SEPARATOR_CHAR);
       } else if (typeof rootId === 'number') {
         this.writeRootRef(rootId);
       } else {
-        this.write(value);
+        this.bufferText(value);
       }
     }
   }
@@ -1462,7 +1462,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   protected openScript(attrs: Props): void {
-    this.write('<script');
+    this.bufferText('<script');
     this.writeAttrs('script', attrs, true, null, null, true);
     this.write(GT);
   }
@@ -1569,27 +1569,30 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   // Keep in sync with process-vnode-data.unit.ts
   private emitVNodeSeparators(lastSerializedIdx: number, elementIdx: number): number {
     let skipCount = elementIdx - lastSerializedIdx;
-    // console.log('emitVNodeSeparators', lastSerializedIdx, elementIdx, skipCount);
+    let separators = '';
     while (skipCount != 0) {
       if (skipCount >= 8192) {
-        this.write(VNodeDataSeparator.ADVANCE_8192_CH);
+        separators += VNodeDataSeparator.ADVANCE_8192_CH;
         skipCount -= 8192;
       } else {
-        skipCount & 4096 && this.write(VNodeDataSeparator.ADVANCE_4096_CH);
-        skipCount & 2048 && this.write(VNodeDataSeparator.ADVANCE_2048_CH);
-        skipCount & 1024 && this.write(VNodeDataSeparator.ADVANCE_1024_CH);
-        skipCount & 512 && this.write(VNodeDataSeparator.ADVANCE_512_CH);
-        skipCount & 256 && this.write(VNodeDataSeparator.ADVANCE_256_CH);
-        skipCount & 128 && this.write(VNodeDataSeparator.ADVANCE_128_CH);
-        skipCount & 64 && this.write(VNodeDataSeparator.ADVANCE_64_CH);
-        skipCount & 32 && this.write(VNodeDataSeparator.ADVANCE_32_CH);
-        skipCount & 16 && this.write(VNodeDataSeparator.ADVANCE_16_CH);
-        skipCount & 8 && this.write(VNodeDataSeparator.ADVANCE_8_CH);
-        skipCount & 4 && this.write(VNodeDataSeparator.ADVANCE_4_CH);
-        skipCount & 2 && this.write(VNodeDataSeparator.ADVANCE_2_CH);
-        skipCount & 1 && this.write(VNodeDataSeparator.ADVANCE_1_CH);
+        skipCount & 4096 && (separators += VNodeDataSeparator.ADVANCE_4096_CH);
+        skipCount & 2048 && (separators += VNodeDataSeparator.ADVANCE_2048_CH);
+        skipCount & 1024 && (separators += VNodeDataSeparator.ADVANCE_1024_CH);
+        skipCount & 512 && (separators += VNodeDataSeparator.ADVANCE_512_CH);
+        skipCount & 256 && (separators += VNodeDataSeparator.ADVANCE_256_CH);
+        skipCount & 128 && (separators += VNodeDataSeparator.ADVANCE_128_CH);
+        skipCount & 64 && (separators += VNodeDataSeparator.ADVANCE_64_CH);
+        skipCount & 32 && (separators += VNodeDataSeparator.ADVANCE_32_CH);
+        skipCount & 16 && (separators += VNodeDataSeparator.ADVANCE_16_CH);
+        skipCount & 8 && (separators += VNodeDataSeparator.ADVANCE_8_CH);
+        skipCount & 4 && (separators += VNodeDataSeparator.ADVANCE_4_CH);
+        skipCount & 2 && (separators += VNodeDataSeparator.ADVANCE_2_CH);
+        skipCount & 1 && (separators += VNodeDataSeparator.ADVANCE_1_CH);
         skipCount = 0;
       }
+    }
+    if (separators) {
+      this.bufferText(separators);
     }
     return elementIdx;
   }
@@ -1666,17 +1669,39 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   ////////////////////////////////////
+  private bufferText(text: string) {
+    this.pendingText += text;
+  }
+
+  private flushPendingText() {
+    const text = this.pendingText;
+    this.pendingText = '';
+    this.size += text.length;
+    this.writer.write(text);
+  }
+
   write(text: string) {
+    if (this.pendingText) {
+      this.pendingText += text;
+      this.flushPendingText();
+      return;
+    }
     this.size += text.length;
     this.writer.write(text);
   }
 
   writeRootRef(id: number) {
+    if (this.pendingText) {
+      this.flushPendingText();
+    }
     this.size += String(id).length;
     this.writer.writeRootRef(id);
   }
 
   writeRootRefPath(path: number[]) {
+    if (this.pendingText) {
+      this.flushPendingText();
+    }
     this.size += String(path[0]).length;
     this.writer.writeRootRefPath(path);
     for (let i = 1; i < path.length; i++) {
@@ -1685,18 +1710,17 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   writeRootRefDelta(id: number, base: number) {
+    if (this.pendingText) {
+      this.flushPendingText();
+    }
     const delta = id - base;
     this.size += String(delta).length;
     this.writer.writeRootRefDelta(id, base);
   }
 
   writeArray(array: string[], separator: string) {
-    for (let i = 0; i < array.length; i++) {
-      const element = array[i];
-      if (i > 0) {
-        this.write(separator);
-      }
-      this.write(element);
+    if (array.length) {
+      this.write(array.join(separator));
     }
   }
 
@@ -1790,17 +1814,16 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
 
       const serializedValue = serializeAttribute(key, value, styleScopedId);
       if (serializedValue != null && serializedValue !== false) {
-        this.write(SPACE);
-        this.write(key);
-        if (serializedValue !== true) {
-          this.write(ATTR_EQUALS_QUOTE);
-          if (Array.isArray(serializedValue)) {
-            this.writeEscapedChunks(serializedValue as SSRWriteChunk[]);
-          } else {
-            const strValue = escapeHTML(String(serializedValue));
-            this.write(strValue);
-          }
-          this.write(QUOTE);
+        if (serializedValue === true) {
+          this.bufferText(SPACE + key);
+        } else if (Array.isArray(serializedValue)) {
+          this.bufferText(SPACE + key + ATTR_EQUALS_QUOTE);
+          this.writeEscapedChunks(serializedValue as SSRWriteChunk[]);
+          this.bufferText(QUOTE);
+        } else {
+          this.bufferText(
+            SPACE + key + ATTR_EQUALS_QUOTE + escapeHTML(String(serializedValue)) + QUOTE
+          );
         }
       }
     }
@@ -1811,7 +1834,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       if (typeof chunk === 'string') {
-        this.write(escapeHTML(chunk));
+        this.bufferText(escapeHTML(chunk));
       } else if (typeof chunk === 'number') {
         this.writeRootRef(chunk);
       } else if ('base' in chunk) {

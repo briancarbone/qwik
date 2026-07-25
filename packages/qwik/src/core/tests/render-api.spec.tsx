@@ -940,7 +940,8 @@ describe('render api', () => {
           stream,
           streaming,
         });
-        expect(write.mock.calls.length).toBeGreaterThan(100);
+        // direct streaming forwards every chunk instead of buffering the page into one write
+        expect(write.mock.calls.length).toBeGreaterThan(10);
       });
       it('should handle jsx promise rejection while a flush is pending', async () => {
         const firstWrite = createDeferred();
