@@ -636,7 +636,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       this.write('<!DOCTYPE html>');
     }
 
-    const containerAttributes = this.renderOptions.containerAttributes || {};
+    const containerAttributes = { ...this.renderOptions.containerAttributes };
     const qRender = containerAttributes[QRenderAttr];
     containerAttributes[QContainerAttr] = QContainerValue.PAUSED;
     containerAttributes[QRuntimeAttr] = '2';

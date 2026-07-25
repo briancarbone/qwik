@@ -354,6 +354,22 @@ describe('render api', () => {
         expect(result.html).toContain(`q:base="${testBase}"`);
       });
     });
+    describe('containerAttributes', () => {
+      it('should not reuse the id when the options are shared between renders', async () => {
+        const containerAttributes = {};
+        const first = await renderToStringAndSetPlatform(<Counter />, {
+          containerTagName: 'div',
+          containerAttributes,
+        });
+        const second = await renderToStringAndSetPlatform(<Counter />, {
+          containerTagName: 'div',
+          containerAttributes,
+        });
+        const idOf = (html: string) => html.match(/q:instance="([a-z0-9]+)"/)?.[1];
+        expect(containerAttributes).toEqual({});
+        expect(idOf(first.html)).not.toEqual(idOf(second.html));
+      });
+    });
     describe('locale', () => {
       it('should render', async () => {
         const testLocale = 'pl';
