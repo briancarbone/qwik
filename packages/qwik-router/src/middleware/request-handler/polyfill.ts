@@ -14,41 +14,28 @@ export class _TextEncoderStream_polyfill {
   #transform = new TransformStream<string, Uint8Array>({
     transform: (chunk, controller) => {
       // https://encoding.spec.whatwg.org/#encode-and-enqueue-a-chunk
+      // TextEncoder already substitutes U+FFFD for lone surrogates, so only a pair
+      // straddling a chunk boundary needs handling here.
       chunk = String(chunk);
 
-      let finalChunk = '';
-      for (let i = 0; i < chunk.length; i++) {
-        const item = chunk[i];
-        const codeUnit = item.charCodeAt(0);
-
-        if (this.#pendingHighSurrogate !== null) {
-          const highSurrogate = this.#pendingHighSurrogate;
-
-          this.#pendingHighSurrogate = null;
-
-          if (0xdc00 <= codeUnit && codeUnit <= 0xdfff) {
-            finalChunk += highSurrogate + item;
-            continue;
-          }
-
-          finalChunk += '\uFFFD';
-        }
-
-        if (0xd800 <= codeUnit && codeUnit <= 0xdbff) {
-          this.#pendingHighSurrogate = item;
-          continue;
-        }
-
-        if (0xdc00 <= codeUnit && codeUnit <= 0xdfff) {
-          finalChunk += '\uFFFD';
-          continue;
-        }
-
-        finalChunk += item;
+      if (this.#pendingHighSurrogate !== null) {
+        chunk = this.#pendingHighSurrogate + chunk;
+        this.#pendingHighSurrogate = null;
       }
 
-      if (finalChunk) {
-        controller.enqueue(this.#handle.encode(finalChunk));
+      const lastIdx = chunk.length - 1;
+      if (lastIdx < 0) {
+        return;
+      }
+
+      const lastCodeUnit = chunk.charCodeAt(lastIdx);
+      if (0xd800 <= lastCodeUnit && lastCodeUnit <= 0xdbff) {
+        this.#pendingHighSurrogate = chunk[lastIdx];
+        chunk = chunk.slice(0, lastIdx);
+      }
+
+      if (chunk) {
+        controller.enqueue(this.#handle.encode(chunk));
       }
     },
 

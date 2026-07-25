@@ -132,4 +132,33 @@ describe('_TextEncoderStream_polyfill tests', () => {
     const result = await reader.read();
     expect(new TextDecoder().decode(result.value)).toBe('test chaining');
   });
+
+  it('joins a surrogate pair split across chunks', async () => {
+    const encoderStream = new _TextEncoderStream_polyfill();
+    const writer = encoderStream.writable.getWriter();
+    const reader = encoderStream.readable.getReader();
+
+    writer.write('a\uD83D');
+    const first = await reader.read();
+    writer.write('\uDE00b');
+    const second = await reader.read();
+    await writer.close();
+
+    expect(new TextDecoder().decode(first.value)).toBe('a');
+    expect(new TextDecoder().decode(second.value)).toBe('😀b');
+  });
+
+  it('replaces a lone high surrogate left at the end of the stream', async () => {
+    const encoderStream = new _TextEncoderStream_polyfill();
+    const writer = encoderStream.writable.getWriter();
+    const reader = encoderStream.readable.getReader();
+
+    writer.write('a\uD83D');
+    const first = await reader.read();
+    await writer.close();
+    const second = await reader.read();
+
+    expect(new TextDecoder().decode(first.value)).toBe('a');
+    expect(new TextDecoder().decode(second.value)).toBe('�');
+  });
 });
