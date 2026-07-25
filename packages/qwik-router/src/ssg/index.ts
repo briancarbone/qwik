@@ -48,17 +48,21 @@ export async function runSsg(opts: SsgGenerateOptions): Promise<never> {
  * Bootstrap a worker thread for SSG rendering. Called from the generated `run-ssg.js` when it
  * detects it's running as a worker thread.
  *
- * @param opts - Must include `render` and `qwikRouterConfig` (imported by the worker entry). The
- *   remaining serializable options come from `workerData`.
+ * @param opts - Must include `render` and `qwikRouterConfig` (imported by the worker entry), plus
+ *   the client `manifest` so generated loader data files match the build hash baked into the HTML.
+ *   The remaining serializable options come from `workerData`.
  * @public
  */
-export async function startWorker(opts: Pick<SsgGenerateOptions, 'render' | 'qwikRouterConfig'>) {
+export async function startWorker(
+  opts: Pick<SsgGenerateOptions, 'render' | 'qwikRouterConfig' | 'manifest'>
+) {
   const { workerData } = await import('node:worker_threads');
   // Merge the serializable workerData with the directly-imported render/config
   const mergedOpts: SsgGenerateOptions = {
     ...workerData,
     render: opts.render,
     qwikRouterConfig: opts.qwikRouterConfig,
+    manifest: workerData?.manifest ?? opts.manifest,
   };
   const { createSystem } = await import('./system');
   const { workerThread } = await import('./worker-thread');

@@ -35,4 +35,30 @@ describe('viteAdapter ssg environment', () => {
     // buildApp must still run so postBuild and the adapter generate() produce the deploy output.
     expect(config.builder).toBeDefined();
   });
+
+  it('gives the ssg worker entry the client manifest', () => {
+    const [plugin] = viteAdapter({ name: 'test', origin: 'https://example.com' }) as any[];
+    plugin.configResolved({
+      command: 'build',
+      plugins: [
+        {
+          name: 'vite-plugin-qwik-router',
+          api: { getBasePathname: () => '/', _setSsgRoutes: () => {} },
+        },
+        {
+          name: 'vite-plugin-qwik',
+          api: {
+            getOptions: () => ({ srcDir: '/app/src' }),
+            getClientPublicOutDir: () => '/app/dist',
+            getRootDir: () => '/app',
+          },
+        },
+      ],
+    });
+
+    const workerEntry = plugin.load('\0@qwik-ssg-worker-entry');
+
+    expect(workerEntry).toContain(`import { getClientManifest } from '@qwik.dev/core';`);
+    expect(workerEntry).toContain('manifest: getClientManifest()');
+  });
 });

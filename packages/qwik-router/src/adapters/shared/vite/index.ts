@@ -125,10 +125,11 @@ export function viteAdapter(opts: ViteAdapterPluginOptions) {
         return [
           `import render from '${srcDir}/entry.ssr';`,
           `import qwikRouterConfig from '@qwik-router-config';`,
+          `import { getClientManifest } from '@qwik.dev/core';`,
           `import { startWorker } from '@qwik.dev/router/ssg';`,
           // Fire-and-forget (no top-level await): avoids an inlined-dynamic-import init-order
           // bug on the SSR target (see rollup/rollup#4166).
-          `startWorker({ render, qwikRouterConfig }).catch((err) => {`,
+          `startWorker({ render, qwikRouterConfig, manifest: getClientManifest() }).catch((err) => {`,
           `  console.error(err);`,
           `  process.exit(1);`,
           `});`,

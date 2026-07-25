@@ -1,3 +1,4 @@
+import type { ResolvedManifest } from '@qwik.dev/core/optimizer';
 import { _serialize as serialize } from '@qwik.dev/core/internal';
 import { parentPort } from 'node:worker_threads';
 import {
@@ -117,6 +118,19 @@ export async function workerThread(sys: System) {
   });
 }
 
+const isResolvedManifest = (
+  manifest: NonNullable<SsgHandlerOptions['manifest']>
+): manifest is Partial<ResolvedManifest> => 'manifest' in manifest;
+
+/** Loader data files must be named with the same build hash the rendered HTML carries. */
+function resolveManifestHash(manifest: SsgHandlerOptions['manifest']): string {
+  if (!manifest) {
+    return 'dev';
+  }
+  const build = isResolvedManifest(manifest) ? manifest.manifest : manifest;
+  return build?.manifestHash || 'dev';
+}
+
 async function workerRender(
   sys: System,
   opts: SsgHandlerOptions,
@@ -234,7 +248,7 @@ async function workerRender(
               if (writeLoaderDataEnabled && !isNotFoundPage) {
                 const routeLoaders = getRouteLoaders(requestEv);
                 const loaderValues = getRouteLoaderValues(requestEv);
-                const manifestHash = (opts.manifest as any)?.manifestHash || 'dev';
+                const manifestHash = resolveManifestHash(opts.manifest);
                 // Write individual per-loader files for static loaders (expires === 0)
                 for (const loader of routeLoaders) {
                   if (loader.__expires !== 0) {

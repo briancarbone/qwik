@@ -410,7 +410,7 @@ Bootstrap a worker thread for SSG rendering. Called from the generated `run-ssg.
 
 ```typescript
 export declare function startWorker(
-  opts: Pick<SsgGenerateOptions, "render" | "qwikRouterConfig">,
+  opts: Pick<SsgGenerateOptions, "render" | "qwikRouterConfig" | "manifest">,
 ): Promise<void>;
 ```
 
@@ -433,11 +433,11 @@ opts
 
 </td><td>
 
-Pick&lt;[SsgGenerateOptions](#ssginternaloptions), 'render' \| 'qwikRouterConfig'&gt;
+Pick&lt;[SsgGenerateOptions](#ssginternaloptions), 'render' \| 'qwikRouterConfig' \| 'manifest'&gt;
 
 </td><td>
 
-Must include `render` and `qwikRouterConfig` (imported by the worker entry). The remaining serializable options come from `workerData`.
+Must include `render` and `qwikRouterConfig` (imported by the worker entry), plus the client `manifest` so generated loader data files match the build hash baked into the HTML. The remaining serializable options come from `workerData`.
 
 </td></tr>
 </tbody></table>

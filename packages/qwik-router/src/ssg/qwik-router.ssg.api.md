@@ -45,7 +45,7 @@ export interface SsgRenderOptions extends RenderOptions {
 }
 
 // @public
-export function startWorker(opts: Pick<SsgInternalOptions, 'render' | 'qwikRouterConfig'>): Promise<void>;
+export function startWorker(opts: Pick<SsgInternalOptions, 'render' | 'qwikRouterConfig' | 'manifest'>): Promise<void>;
 
 // @public (undocumented)
 export interface StaticGenerateResult {
